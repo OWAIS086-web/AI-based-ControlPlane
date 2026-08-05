@@ -1,0 +1,13 @@
+// Barrel export for UI components
+export { default as AppBadge } from './AppBadge.vue'
+export { default as AppButton } from './AppButton.vue'
+export { default as AppCard } from './AppCard.vue'
+export { default as AppInput } from './AppInput.vue'
+export { default as AppModal } from './AppModal.vue'
+export { default as AppSelect } from './AppSelect.vue'
+export { default as ConfirmDialog } from './ConfirmDialog.vue'
+export { default as FormField } from './FormField.vue'
+export { default as PageHeader } from './PageHeader.vue'
+export { default as StatCard } from './StatCard.vue'
+export { default as ToastContainer } from './ToastContainer.vue'
+export { default as UserAvatar } from './UserAvatar.vue'

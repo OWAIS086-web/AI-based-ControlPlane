@@ -1,0 +1,108 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* ── Light mode (default) ─────────────────────────────────────── */
+  :root {
+    /* Surface palette */
+    --surface-950: #FFFFFF;
+    --surface-900: #F8FAFC;
+    --surface-800: #F1F5F9;
+    --surface-700: #E2E8F0;
+    --surface-600: #CBD5E1;
+    --surface-500: #94A3B8;
+    --surface-400: #64748B;
+    --surface-300: #475569;
+    --surface-200: #334155;
+    --surface-100: #1E293B;
+
+    /* Slate text overrides */
+    --slate-100: #0F172A;
+    --slate-200: #1E293B;
+    --slate-300: #334155;
+    --slate-400: #64748B;
+
+    /* shadcn-vue tokens */
+    --background: 0 0% 100%;
+    --foreground: 222 47% 11%;
+    --card: 0 0% 98%;
+    --card-foreground: 222 47% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+    --primary: 239 84% 67%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%;
+    --accent: 210 40% 96%;
+    --accent-foreground: 222 47% 11%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 239 84% 67%;
+    --radius: 0.5rem;
+  }
+
+  /* ── Dark mode ────────────────────────────────────────────────── */
+  .dark {
+    /* Surface backgrounds — clearly distinguishable steps */
+    --surface-950: #08101F;   /* deepest: page bg                  */
+    --surface-900: #0D1628;   /* sidebar / nav bg                  */
+    --surface-800: #132034;   /* card / panel bg                   */
+    --surface-700: #1B2B43;   /* dividers, subtle borders          */
+    --surface-600: #243554;   /* input backgrounds, element fills  */
+    --surface-500: #2F4468;   /* stronger element fills            */
+
+    /* Surface 100–400 are used as TEXT — must be legible on dark bg */
+    --surface-400: #5E83A8;   /* placeholder, disabled icons       */
+    --surface-300: #7DA3C2;   /* muted text, secondary icons       */
+    --surface-200: #9BBFD8;   /* secondary body text               */
+    --surface-100: #BAD3E5;   /* body text, labels                 */
+
+    /* Primary text */
+    --slate-100: #F0F5FA;     /* headings, primary text            */
+    --slate-200: #D8E8F2;     /* regular body text                 */
+    --slate-300: #B8D0E2;     /* tertiary text                     */
+    --slate-400: #7DA3C2;     /* dimmed / inactive text            */
+
+    /* shadcn-vue tokens */
+    --background: 216 50% 8%;
+    --foreground: 210 40% 96%;
+    --card: 216 45% 12%;
+    --card-foreground: 210 40% 96%;
+    --popover: 216 45% 10%;
+    --popover-foreground: 210 40% 96%;
+    --primary: 239 84% 67%;
+    --primary-foreground: 216 50% 8%;
+    --secondary: 216 35% 18%;
+    --secondary-foreground: 210 40% 96%;
+    --muted: 216 35% 16%;
+    --muted-foreground: 215 25% 62%;
+    --accent: 216 35% 18%;
+    --accent-foreground: 210 40% 96%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 96%;
+    --border: 216 35% 20%;
+    --input: 216 35% 18%;
+    --ring: 239 84% 67%;
+    --radius: 0.5rem;
+  }
+
+  * { box-sizing: border-box; }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--surface-950); }
+  ::-webkit-scrollbar-thumb { background: var(--surface-600); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--surface-500); }
+}
+
+@layer utilities {
+  .line-clamp-1 { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; }
+}
+
+/* Upload panel — indeterminate progress bar needs to escape its overflow:hidden parent.
+   The bar is 35% wide and slides across via translateX. The parent track uses
+   overflow:hidden so we set it on the outer wrapper only when not indeterminate.
+   Animation keyframes are declared in UploadPanel.vue's <style> block. */

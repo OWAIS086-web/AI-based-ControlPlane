@@ -1,0 +1,31 @@
+name: Build & Push Frontend
+on:
+  push:
+    branches: [ "main", "master" ]
+
+jobs:
+  build:
+    runs-on:
+      group: copilot
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log in to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build & push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/controlplane-frontend:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/controlplane-frontend:${{ github.sha }}
+      
+      - name: Print SHA for deploy
+        run: echo "Frontend SHA to use for deploy => ${{ github.sha }}"
