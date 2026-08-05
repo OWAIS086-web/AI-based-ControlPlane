@@ -1,0 +1,95 @@
+name: Deploy API in Haval (Linux)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "deploy" to confirm'
+        required: true
+
+jobs:
+  deploy:
+    runs-on:
+      group: Haval-visionrd
+    if: ${{ github.event.inputs.confirm == 'deploy' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Detect server IP
+        id: server_ip
+        run: |
+          PRIVATE_IP=$(hostname -I | awk '{print $1}')
+          echo "Using private IP: $PRIVATE_IP"
+          echo "ip=$PRIVATE_IP" >> $GITHUB_OUTPUT
+
+      - name: Write .env
+        run: |
+          mkdir -p /opt/controlplane
+          echo "${{ secrets.ENV_FILE }}" > /opt/controlplane/.env
+          # Override MinIO public endpoint with detected IP
+          sed -i "s|^AWS_PUBLIC_ENDPOINT_URL=.*|AWS_PUBLIC_ENDPOINT_URL=http://${{ steps.server_ip.outputs.ip }}:9000|" /opt/controlplane/.env
+          echo "MinIO public endpoint set to: http://${{ steps.server_ip.outputs.ip }}:9000"
+
+          # Haval-specific overrides: public nginx port and host data directory
+          sed -i "/^NGINX_PORT=/d;/^DATA_DIR=/d" /opt/controlplane/.env
+          printf '\nNGINX_PORT=10003\nDATA_DIR=/opt/controlplane/data\n' >> /opt/controlplane/.env
+          echo "nginx published on port 10003, data bind-mounted from /opt/controlplane/data"
+
+      - name: Prepare bind-mounted data directories
+        run: |
+          mkdir -p /opt/controlplane/data/postgres \
+                   /opt/controlplane/data/minio \
+                   /opt/controlplane/data/prometheus \
+                   /opt/controlplane/data/grafana
+          # Ownership must match the uid each image drops to; done in-container so
+          # the runner does not need host root.
+          docker run --rm -v /opt/controlplane/data:/data alpine:3 sh -c \
+            "chown -R 65534:65534 /data/prometheus && chown -R 472:472 /data/grafana"
+          ls -la /opt/controlplane/data
+
+      - name: Copy compose and nginx config
+        run: |
+          cp docker-compose.yml /opt/controlplane/docker-compose.yml
+          mkdir -p /opt/controlplane/nginx
+          cp nginx/default.conf /opt/controlplane/nginx/default.conf
+
+      - name: Extract config files from API image
+        run: |
+          # Remove any bad state first
+          rm -rf /opt/controlplane/prometheus
+          rm -rf /opt/controlplane/grafana
+
+          # Create a temporary container without starting it
+          docker create --name temp_api ${{ secrets.DOCKERHUB_USERNAME }}/controlplane-api:latest
+
+          # Copy all config files out
+          mkdir -p /opt/controlplane/prometheus
+          mkdir -p /opt/controlplane/grafana/provisioning
+          mkdir -p /opt/controlplane/grafana/dashboards
+
+          docker cp temp_api:/etc/prometheus/prometheus.yml /opt/controlplane/prometheus/prometheus.yml
+          docker cp temp_api:/etc/grafana/provisioning/. /opt/controlplane/grafana/provisioning/
+          docker cp temp_api:/etc/grafana/dashboards/. /opt/controlplane/grafana/dashboards/
+
+          # Clean up temp container
+          docker rm temp_api
+
+      - name: Pull latest image
+        run: |
+          docker pull ${{ secrets.DOCKERHUB_USERNAME }}/controlplane-api:latest
+          docker pull ${{ secrets.DOCKERHUB_USERNAME }}/controlplane-frontend:latest
+
+      - name: Restart API
+        run: |
+          cd /opt/controlplane
+          docker compose rm -sf frontend nginx
+          docker volume rm controlplane_frontend_build || true
+          docker compose up -d --force-recreate
+      # - name: Run migrations
+      #   run: |
+      #     cd /opt/controlplane
+      #     docker compose exec -T api prisma migrate deploy
+
+      - name: Clean up
+        run: docker image prune -f

@@ -1,0 +1,59 @@
+name: Restart Services (Windows)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "deploy" to confirm'
+        required: true
+
+jobs:
+  restart:
+    runs-on:
+      group: control-plane
+      labels: [haval-2]
+    if: ${{ github.event.inputs.confirm == 'deploy' }}
+    defaults:
+      run:
+        shell: powershell
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Detect server IP
+        id: server_ip
+        run: |
+          $ip = (Get-NetIPAddress -AddressFamily IPv4 | Where-Object {
+            $_.IPAddress -notmatch '^127\.' -and
+            $_.IPAddress -notmatch '^169\.254\.' -and
+            $_.PrefixOrigin -ne 'WellKnown'
+          } | Select-Object -First 1).IPAddress
+          echo "Using private IP: $ip"
+          echo "ip=$ip" >> $env:GITHUB_OUTPUT
+
+      - name: Write .env
+        run: |
+          $envDir = "C:\controlplane"
+          New-Item -ItemType Directory -Force -Path $envDir | Out-Null
+          $bytes = [System.Text.Encoding]::UTF8.GetBytes('${{ secrets.ENV_FILE }}')
+          [System.IO.File]::WriteAllBytes("$envDir\.env", $bytes)
+          $ip = "${{ steps.server_ip.outputs.ip }}"
+          $minioUrl = "http://${ip}:9000"
+          $content = [System.IO.File]::ReadAllText("$envDir\.env")
+          $content = $content -replace '(?m)^AWS_PUBLIC_ENDPOINT_URL=.*', "AWS_PUBLIC_ENDPOINT_URL=$minioUrl"
+          [System.IO.File]::WriteAllText("$envDir\.env", $content)
+          echo "MinIO public endpoint set to: $minioUrl"
+
+      - name: Copy compose and nginx config
+        run: |
+          $envDir = "C:\controlplane"
+          Copy-Item -Force docker-compose.yml "$envDir\docker-compose.yml"
+          New-Item -ItemType Directory -Force -Path "$envDir\nginx" | Out-Null
+          Copy-Item -Force nginx\default.conf "$envDir\nginx\default.conf"
+
+      - name: Restart services
+        run: |
+          Set-Location "C:\controlplane"
+          docker compose down
+          docker compose up -d --force-recreate

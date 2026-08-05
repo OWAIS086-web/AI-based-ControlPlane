@@ -1,0 +1,404 @@
+generator client {
+  provider             = "prisma-client-py"
+  interface            = "asyncio"
+  recursive_type_depth = 5
+  // Pin to Prisma 5.x — v6 changed datasource config and is not yet
+  // supported by prisma-client-py 0.13.x
+  engineType           = "binary"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  process_manager
+  line_manager
+}
+
+enum UserStatus {
+  active
+  inactive
+}
+
+enum ProcessStatus {
+  active
+  archived
+  deleted
+}
+
+enum CarModelStatus {
+  active
+  archived
+}
+
+enum MigrationStatus {
+  pending
+  completed
+  failed
+}
+
+enum AIStatus {
+  idle
+  ai_running
+  completed
+  failed
+}
+
+enum AuditType {
+  upload
+  user
+  station
+  archive
+  migrate
+  model
+  delete
+  restore
+  tool
+  worker
+  tool_request
+}
+
+// ─── Models ──────────────────────────────────────────────────────────────────
+
+model LineType {
+  id    String @id @default(uuid())
+  name  String
+  icon  String @default("factory")
+  color String @default("#6366F1")
+  order Int    @default(0)
+
+  lines AssemblyLine[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("line_types")
+}
+
+model User {
+  id             String     @id @default(uuid())
+  name           String
+  email          String     @unique
+  hashedPassword String     @map("hashed_password")
+  role           UserRole
+  status         UserStatus @default(active)
+  avatar         String?
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  // Relations
+  refreshTokens    RefreshToken[]
+  settings         UserSettings?
+  managedLines     AssemblyLine[]   @relation("LineManager")
+  uploadedVersions ProcessVersion[] @relation("VersionUploader")
+  migrations       MigrationRecord[] @relation("MigrationPerformer")
+  auditEntries     AuditEntry[]     @relation("AuditPerformer")
+  toolRequests     ToolRequest[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  tokenHash String   @unique @map("token_hash")
+  revoked   Boolean  @default(false)
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+model AssemblyLine {
+  id         String  @id
+  name       String
+  icon       String  @default("factory")
+  color      String  @default("#6366F1")
+  managerId  String? @map("manager_id")
+  lineTypeId String? @map("line_type_id")
+  order      Int     @default(0)
+
+  manager  User?     @relation("LineManager", fields: [managerId], references: [id], onDelete: SetNull)
+  lineType LineType? @relation(fields: [lineTypeId], references: [id], onDelete: SetNull)
+  stations Station[]
+
+  @@index([lineTypeId])
+  @@map("assembly_lines")
+}
+
+model Station {
+  id     String @id @default(uuid())
+  name   String
+  lineId String @map("line_id")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  line      AssemblyLine @relation(fields: [lineId], references: [id], onDelete: Cascade)
+  processes Process[]
+
+  @@unique([lineId, name])
+  @@index([lineId])
+  @@map("stations")
+}
+
+model CarModel {
+  id     String         @id @default(uuid())
+  name   String
+  code   String         @unique
+  color  String         @default("#3B82F6")
+  status CarModelStatus @default(active)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  processes Process[]
+
+  @@map("car_models")
+}
+
+model Process {
+  id            String        @id @default(uuid())
+  name          String
+  code          String        @unique
+  extractedCode String?       @map("extracted_code")
+  searchText    String?       @map("search_text")
+  lineId        String        @map("line_id")
+  stationId     String        @map("station_id")
+  carModelId    String        @map("car_model_id")
+  status        ProcessStatus @default(active)
+  hasMissingCp  Boolean       @default(true) @map("has_missing_cp")
+  aiStatus      AIStatus      @default(idle) @map("ai_status")
+  aiUpdatedAt   DateTime?     @map("ai_updated_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  station    Station  @relation(fields: [stationId], references: [id], onDelete: Restrict)
+  carModel   CarModel @relation(fields: [carModelId], references: [id], onDelete: Restrict)
+  versions   ProcessVersion[]
+  assignment WorkerAssignment?
+  tools      Tool[]
+
+  @@index([lineId])
+  @@index([stationId])
+  @@index([carModelId])
+  @@map("processes")
+}
+
+model ProcessVersion {
+  id            String   @id @default(uuid())
+  processId     String   @map("process_id")
+  version       String
+  fileUrl       String   @map("file_url")
+  fileName      String?  @map("file_name")
+  fileSize      Int      @map("file_size")
+  commitMessage String   @map("commit_message")
+  changes       Int      @default(0)
+  uploadedBy    String   @map("uploaded_by")
+  diff          Json     @default("[]")
+  extractedData Json?    @map("extracted_data")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  process  Process @relation(fields: [processId], references: [id], onDelete: Cascade)
+  uploader User    @relation("VersionUploader", fields: [uploadedBy], references: [id], onDelete: Restrict)
+
+  @@index([processId])
+  @@map("process_versions")
+}
+
+model MigrationRecord {
+  id            String          @id @default(uuid())
+  fromLineId    String          @map("from_line_id")
+  fromStationId String          @map("from_station_id")
+  toLineId      String          @map("to_line_id")
+  toStationId   String          @map("to_station_id")
+  processIds    String[]        @map("process_ids")
+  status        MigrationStatus @default(pending)
+  performedBy   String          @map("performed_by")
+
+  createdAt   DateTime  @default(now()) @map("created_at")
+  completedAt DateTime? @map("completed_at")
+
+  performer User @relation("MigrationPerformer", fields: [performedBy], references: [id], onDelete: Restrict)
+
+  @@index([status])
+  @@map("migration_records")
+}
+
+model AuditEntry {
+  id          String    @id @default(uuid())
+  type        AuditType
+  action      String
+  target      String
+  performedBy String    @map("performed_by")
+  metadata    Json      @default("{}")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  performer User @relation("AuditPerformer", fields: [performedBy], references: [id], onDelete: Restrict)
+
+  @@index([type])
+  @@index([performedBy])
+  @@index([createdAt])
+  @@map("audit_entries")
+}
+
+model Worker {
+  id        String   @id @default(uuid())
+  name      String
+  workerId  String   @unique @map("worker_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  assignments  WorkerAssignment[]
+  tools        Tool[]
+  toolRequests ToolRequest[]
+
+  @@map("workers")
+}
+
+model WorkerAssignment {
+  id        String @id @default(uuid())
+  workerId  String @map("worker_id")
+  processId String @unique @map("process_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  worker  Worker  @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  process Process @relation(fields: [processId], references: [id], onDelete: Cascade)
+
+  @@index([workerId])
+  @@map("worker_assignments")
+}
+
+model SystemConfig {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("system_config")
+}
+
+model UserSettings {
+  userId             String  @id @map("user_id")
+  notifNewUploads    Boolean @default(true)  @map("notif_new_uploads")
+  notifMigrations    Boolean @default(true)  @map("notif_migrations")
+  notifUserChanges   Boolean @default(false) @map("notif_user_changes")
+  notifSystemAlerts  Boolean @default(true)  @map("notif_system_alerts")
+  dataRetentionDays  Int     @default(90)    @map("data_retention_days")
+
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_settings")
+}
+
+// ─── Tool Management ─────────────────────────────────────────────────────────
+
+enum ToolStatus {
+  available
+  assigned
+  faulty
+  in_repair
+}
+
+enum ToolRequestStatus {
+  pending
+  in_review
+  resolved
+}
+
+model ToolType {
+  id           String   @id @default(uuid())
+  name         String   @unique
+  maxPerWorker Int      @default(1) @map("max_per_worker")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  tools        Tool[]
+  toolRequests ToolRequest[]
+
+  @@map("tool_types")
+}
+
+model Tool {
+  id        String     @id @default(uuid())
+  toolId    String     @unique @map("tool_id")
+  typeId    String     @map("type_id")
+  status    ToolStatus @default(available)
+  workerId  String?    @map("worker_id")
+  processId String?    @map("process_id")
+  notes     String?
+  createdAt DateTime   @default(now()) @map("created_at")
+  updatedAt DateTime   @updatedAt @map("updated_at")
+
+  type           ToolType      @relation(fields: [typeId], references: [id], onDelete: Restrict)
+  worker         Worker?       @relation(fields: [workerId], references: [id], onDelete: SetNull)
+  process        Process?      @relation(fields: [processId], references: [id], onDelete: SetNull)
+  events         ToolEvent[]
+  faultyReports  ToolRequest[] @relation("FaultyToolRequests")
+  replacementFor ToolRequest[] @relation("ReplacementToolRequests")
+
+  @@index([typeId])
+  @@index([workerId])
+  @@map("tools")
+}
+
+model ToolEvent {
+  id          String   @id @default(uuid())
+  toolDbId    String   @map("tool_db_id")
+  action      String
+  workerId    String?  @map("worker_id")
+  workerName  String?  @map("worker_name")
+  processId   String?  @map("process_id")
+  processName String?  @map("process_name")
+  note        String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  tool Tool @relation(fields: [toolDbId], references: [id], onDelete: Cascade)
+
+  @@index([toolDbId])
+  @@map("tool_events")
+}
+
+model ToolRequest {
+  id                 String            @id @default(uuid())
+  reportedToolId     String            @map("reported_tool_id")
+  toolDbId           String?           @map("tool_db_id")
+  typeId             String            @map("type_id")
+  workerId           String?           @map("worker_id")
+  reporterName       String            @map("reporter_name")
+  reportedByUserId   String?           @map("reported_by_user_id")
+  notes              String?
+  status             ToolRequestStatus @default(pending)
+  replacementToolId  String?           @map("replacement_tool_id")
+  resolvedNote       String?           @map("resolved_note")
+  resolvedAt         DateTime?         @map("resolved_at")
+  createdAt          DateTime          @default(now()) @map("created_at")
+  updatedAt          DateTime          @updatedAt @map("updated_at")
+
+  tool              Tool?     @relation("FaultyToolRequests", fields: [toolDbId], references: [id], onDelete: SetNull)
+  type              ToolType  @relation(fields: [typeId], references: [id], onDelete: Restrict)
+  worker            Worker?   @relation(fields: [workerId], references: [id], onDelete: SetNull)
+  replacementTool   Tool?     @relation("ReplacementToolRequests", fields: [replacementToolId], references: [id], onDelete: SetNull)
+  reportedByUser    User?     @relation(fields: [reportedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@index([workerId])
+  @@index([reportedByUserId])
+  @@map("tool_requests")
+}

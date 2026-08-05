@@ -1,0 +1,17 @@
+.env
+*.env
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.venv/
+venv/
+node_modules/
+prisma/migrations/
+*.egg-info/
+dist/
+.DS_Store
+
+changes.txt
+.gitignore
+*.xlsx

@@ -1,0 +1,213 @@
+name: Start Docker Engine (Windows)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  start-docker:
+    runs-on:
+      group: control-plane
+      labels: [haval-2]
+    defaults:
+      run:
+        shell: powershell
+
+    steps:
+      # ----------------------------------------------------------------
+      # STEP 1 — Diagnose
+      # ----------------------------------------------------------------
+      - name: Diagnose Docker setup
+        run: |
+          Write-Host "============================================"
+          Write-Host " DOCKER DIAGNOSTICS"
+          Write-Host "============================================"
+
+          Write-Host ""
+          Write-Host "--- Current user ---"
+          whoami
+
+          Write-Host ""
+          Write-Host "--- Is Administrator ---"
+          $isAdmin = ([Security.Principal.WindowsPrincipal] `
+            [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
+              [Security.Principal.WindowsBuiltInRole]::Administrator)
+          Write-Host "Is Administrator: $isAdmin"
+
+          Write-Host ""
+          Write-Host "--- Docker-related services ---"
+          Get-Service | Where-Object { $_.Name -like "*docker*" -or $_.DisplayName -like "*docker*" } |
+            Format-Table Name, DisplayName, Status, StartType -AutoSize
+
+          Write-Host ""
+          Write-Host "--- Named pipes (docker) ---"
+          try {
+            $pipes = [System.IO.Directory]::GetFiles("\\.\\pipe\\") |
+              Where-Object { $_ -like "*docker*" }
+            if ($pipes) { $pipes } else { Write-Host "No docker named pipes found." }
+          } catch {
+            Write-Host "Could not enumerate pipes: $_"
+          }
+
+          Write-Host ""
+          Write-Host "--- docker-users group members ---"
+          try {
+            Get-LocalGroupMember -Group "docker-users" -ErrorAction Stop
+          } catch {
+            Write-Host "docker-users group not found or inaccessible: $_"
+          }
+
+      # ----------------------------------------------------------------
+      # STEP 2 — Check if Docker is already running
+      # ----------------------------------------------------------------
+      - name: Check if Docker is already running
+        id: docker_check
+        run: |
+          & docker info 2>&1 | Out-Null
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "Docker is already running. Nothing to do."
+            echo "already_running=true" >> $env:GITHUB_OUTPUT
+          } else {
+            Write-Host "Docker is not running."
+            echo "already_running=false" >> $env:GITHUB_OUTPUT
+          }
+
+      # ----------------------------------------------------------------
+      # STEP 3 — Try sc.exe to start com.docker.service
+      #           sc.exe sometimes works for NETWORK SERVICE even when
+      #           Start-Service does not, if the service grants START
+      #           permission to non-admins via its DACL.
+      # ----------------------------------------------------------------
+      - name: Try sc.exe start com.docker.service
+        if: steps.docker_check.outputs.already_running == 'false'
+        id: sc_start
+        run: |
+          $started = $false
+
+          Write-Host "Attempting: sc.exe start com.docker.service"
+          $result = sc.exe start com.docker.service 2>&1
+          Write-Host $result
+
+          # Wait and poll
+          $timeout = 60
+          $elapsed = 0
+          do {
+            Start-Sleep -Seconds 5
+            $elapsed += 5
+            $svc = Get-Service -Name "com.docker.service" -ErrorAction SilentlyContinue
+            Write-Host "Service status: $($svc.Status) ($elapsed/$timeout s)"
+            & docker info 2>&1 | Out-Null
+            if ($LASTEXITCODE -eq 0) {
+              Write-Host "Docker is responding!"
+              $started = $true
+              break
+            }
+          } while ($elapsed -lt $timeout)
+
+          if ($started) {
+            echo "sc_started=true" >> $env:GITHUB_OUTPUT
+          } else {
+            Write-Host "sc.exe start did not bring Docker up."
+            echo "sc_started=false" >> $env:GITHUB_OUTPUT
+          }
+
+      # ----------------------------------------------------------------
+      # STEP 4 — Try launching Docker Desktop process
+      #           (works if the runner has an interactive/GUI session)
+      # ----------------------------------------------------------------
+      - name: Try launching Docker Desktop
+        if: |
+          steps.docker_check.outputs.already_running == 'false' &&
+          steps.sc_start.outputs.sc_started == 'false'
+        id: desktop_start
+        run: |
+          $started = $false
+          $exe = "C:\Program Files\Docker\Docker\Docker Desktop.exe"
+
+          if (Test-Path $exe) {
+            Write-Host "Launching Docker Desktop..."
+            Start-Process -FilePath $exe -WindowStyle Hidden
+
+            $timeout = 120
+            $elapsed = 0
+            do {
+              Start-Sleep -Seconds 5
+              $elapsed += 5
+              & docker info 2>&1 | Out-Null
+              if ($LASTEXITCODE -eq 0) {
+                Write-Host "Docker Desktop ready! ($elapsed s)"
+                $started = $true
+                break
+              }
+              Write-Host "Waiting... ($elapsed/$timeout s)"
+            } while ($elapsed -lt $timeout)
+          } else {
+            Write-Host "Docker Desktop exe not found."
+          }
+
+          if ($started) {
+            echo "desktop_started=true" >> $env:GITHUB_OUTPUT
+          } else {
+            Write-Host "Docker Desktop did not become ready."
+            echo "desktop_started=false" >> $env:GITHUB_OUTPUT
+          }
+
+      # ----------------------------------------------------------------
+      # STEP 5 — All methods failed: print clear fix instructions
+      # ----------------------------------------------------------------
+      - name: Fail with fix instructions
+        if: |
+          steps.docker_check.outputs.already_running == 'false' &&
+          steps.sc_start.outputs.sc_started == 'false' &&
+          steps.desktop_start.outputs.desktop_started == 'false'
+        run: |
+          Write-Host ""
+          Write-Host "============================================"
+          Write-Host " FAILED: Docker could not be started"
+          Write-Host "============================================"
+          Write-Host ""
+          Write-Host "ROOT CAUSE:"
+          Write-Host "  Runner is 'NT AUTHORITY\NETWORK SERVICE' (non-admin)."
+          Write-Host "  'com.docker.service' exists but is Stopped/Manual."
+          Write-Host "  'dockerd.exe' is not installed (Docker Desktop only)."
+          Write-Host ""
+          Write-Host "PERMANENT FIX (run once on the runner machine as admin):"
+          Write-Host ""
+          Write-Host "  Option A — Set service to auto-start (recommended):"
+          Write-Host "    sc.exe config com.docker.service start= auto"
+          Write-Host "    sc.exe start com.docker.service"
+          Write-Host ""
+          Write-Host "  Option B — Grant NETWORK SERVICE permission to start the service:"
+          Write-Host "    # Get current SDDL"
+          Write-Host "    sc.exe sdshow com.docker.service"
+          Write-Host "    # Grant start/stop to NETWORK SERVICE (S-1-5-20):"
+          Write-Host "    sc.exe sdset com.docker.service <SDDL with RP added for NS>"
+          Write-Host ""
+          Write-Host "  Option C — Add runner account to docker-users group:"
+          Write-Host "    Add-LocalGroupMember -Group 'docker-users' -Member 'NT AUTHORITY\NETWORK SERVICE'"
+          Write-Host "    sc.exe config com.docker.service start= auto"
+          Write-Host ""
+          Write-Host "  Option D — Install Docker Engine (standalone, no Desktop):"
+          Write-Host "    winget install Docker.DockerCLI"
+          Write-Host "    dockerd --register-service"
+          Write-Host "    sc.exe config docker start= auto"
+          Write-Host "    Start-Service docker"
+          Write-Host ""
+          exit 1
+
+      # ----------------------------------------------------------------
+      # STEP 6 — Docker is up: show status
+      # ----------------------------------------------------------------
+      - name: Confirm Docker is healthy
+        run: |
+          Write-Host "============================================"
+          Write-Host " DOCKER IS READY"
+          Write-Host "============================================"
+          Write-Host ""
+          Write-Host "--- Docker version ---"
+          docker version
+          Write-Host ""
+          Write-Host "--- Running containers ---"
+          docker ps
+          Write-Host ""
+          Write-Host "--- Images ---"
+          docker images

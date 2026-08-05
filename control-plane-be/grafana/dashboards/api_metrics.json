@@ -1,0 +1,475 @@
+{
+  "__inputs": [],
+  "__requires": [],
+  "annotations": { "list": [] },
+  "editable": true,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 200,
+      "title": "Key Metrics",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": { "unit": "short", "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] } }
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 1 },
+      "id": 1,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area", "textMode": "auto" },
+      "targets": [{ "expr": "sum(http_requests_total{job=\"controlplane_api\"})", "legendFormat": "Total", "refId": "A" }],
+      "title": "Total Requests (all time)",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": { "unit": "reqps", "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] } }
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 1 },
+      "id": 2,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area" },
+      "targets": [{ "expr": "sum(rate(http_requests_total{job=\"controlplane_api\"}[1m]))", "legendFormat": "req/s", "refId": "A" }],
+      "title": "Requests / sec (1m)",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": { "unit": "percentunit", "min": 0, "max": 1,
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "red", "value": null },
+            { "color": "yellow", "value": 0.95 },
+            { "color": "green", "value": 0.99 }
+          ]} }
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 1 },
+      "id": 3,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
+      "targets": [{
+        "expr": "sum(rate(http_requests_total{job=\"controlplane_api\",status_code=~\"2..\"}[5m])) / sum(rate(http_requests_total{job=\"controlplane_api\"}[5m]))",
+        "legendFormat": "", "refId": "A"
+      }],
+      "title": "Success Rate (5m)",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": { "unit": "percentunit", "min": 0, "max": 1,
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green", "value": null },
+            { "color": "yellow", "value": 0.01 },
+            { "color": "red", "value": 0.05 }
+          ]} }
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 1 },
+      "id": 4,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
+      "targets": [{
+        "expr": "sum(rate(http_requests_total{job=\"controlplane_api\",status_code=~\"[45]..\"}[5m])) / sum(rate(http_requests_total{job=\"controlplane_api\"}[5m]))",
+        "legendFormat": "", "refId": "A"
+      }],
+      "title": "Error Rate (5m)",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": { "unit": "s", "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green", "value": null },
+            { "color": "yellow", "value": 0.5 },
+            { "color": "red", "value": 1 }
+          ]} }
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 1 },
+      "id": 5,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
+      "targets": [{
+        "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{job=\"controlplane_api\"}[5m])) by (le))",
+        "legendFormat": "", "refId": "A"
+      }],
+      "title": "p99 Latency",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": { "unit": "short", "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "purple", "value": null }] } }
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 1 },
+      "id": 6,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area" },
+      "targets": [{
+        "expr": "count(increase(controlplane_user_requests_total[5m]) > 0)",
+        "legendFormat": "", "refId": "A"
+      }],
+      "title": "Active Users (5m)",
+      "type": "stat"
+    },
+
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 5 },
+      "id": 201,
+      "title": "Performance",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "custom": { "lineWidth": 2 }, "unit": "reqps" }
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 6 },
+      "id": 10,
+      "targets": [
+        { "expr": "sum(rate(http_requests_total{job=\"controlplane_api\"}[1m]))", "legendFormat": "Total req/s", "refId": "A" },
+        { "expr": "sum(rate(http_requests_total{job=\"controlplane_api\",status_code=~\"2..\"}[1m]))", "legendFormat": "2xx req/s", "refId": "B" },
+        { "expr": "sum(rate(http_requests_total{job=\"controlplane_api\",status_code=~\"[45]..\"}[1m]))", "legendFormat": "Error req/s", "refId": "C" }
+      ],
+      "title": "Throughput (req/s)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "custom": { "lineWidth": 2 }, "unit": "s" }
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 6 },
+      "id": 11,
+      "targets": [
+        { "expr": "histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket{job=\"controlplane_api\"}[5m])) by (le))", "legendFormat": "p50", "refId": "A" },
+        { "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job=\"controlplane_api\"}[5m])) by (le))", "legendFormat": "p95", "refId": "B" },
+        { "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{job=\"controlplane_api\"}[5m])) by (le))", "legendFormat": "p99", "refId": "C" }
+      ],
+      "title": "Latency Percentiles",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "custom": { "lineWidth": 2 }, "unit": "none" }
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 6 },
+      "id": 12,
+      "targets": [
+        { "expr": "sum(http_requests_in_progress{job=\"controlplane_api\"})", "legendFormat": "In-flight", "refId": "A" }
+      ],
+      "title": "In-Flight Requests",
+      "type": "timeseries"
+    },
+
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 14 },
+      "id": 202,
+      "title": "Request Volume",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "custom": { "lineWidth": 2, "fillOpacity": 10 }, "unit": "short" }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 15 },
+      "id": 20,
+      "targets": [
+        { "expr": "sum(increase(http_requests_total{job=\"controlplane_api\"}[5m]))", "legendFormat": "Total", "refId": "A" },
+        { "expr": "sum(increase(http_requests_total{job=\"controlplane_api\",status_code=~\"2..\"}[5m]))", "legendFormat": "2xx", "refId": "B" },
+        { "expr": "sum(increase(http_requests_total{job=\"controlplane_api\",status_code=~\"4..\"}[5m]))", "legendFormat": "4xx", "refId": "C" },
+        { "expr": "sum(increase(http_requests_total{job=\"controlplane_api\",status_code=~\"5..\"}[5m]))", "legendFormat": "5xx", "refId": "D" }
+      ],
+      "title": "Request Count (per 5m window)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "custom": { "lineWidth": 2 }, "unit": "short" }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 15 },
+      "id": 21,
+      "targets": [
+        { "expr": "sum(increase(http_requests_total{job=\"controlplane_api\"}[5m])) by (method)", "legendFormat": "{{method}}", "refId": "A" }
+      ],
+      "title": "Request Count by HTTP Method (per 5m window)",
+      "type": "timeseries"
+    },
+
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 23 },
+      "id": 203,
+      "title": "Errors",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "custom": { "lineWidth": 2 }, "unit": "reqps" }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
+      "id": 30,
+      "targets": [
+        { "expr": "sum(rate(http_requests_total{job=\"controlplane_api\",status_code=~\"4..\"}[1m])) by (status_code)", "legendFormat": "{{status_code}}", "refId": "A" },
+        { "expr": "sum(rate(http_requests_total{job=\"controlplane_api\",status_code=~\"5..\"}[1m])) by (status_code)", "legendFormat": "{{status_code}}", "refId": "B" }
+      ],
+      "title": "Error Rate by Status Code (4xx / 5xx)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": { "displayMode": "color-background" },
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green", "value": null },
+            { "color": "yellow", "value": 1 },
+            { "color": "red", "value": 10 }
+          ]}
+        }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
+      "id": 31,
+      "options": { "sortBy": [{ "desc": true, "displayName": "Errors (1h)" }] },
+      "targets": [{
+        "expr": "sort_desc(sum(increase(http_requests_total{job=\"controlplane_api\",status_code=~\"[45]..\"}[1h])) by (handler, status_code))",
+        "legendFormat": "{{handler}} {{status_code}}",
+        "refId": "A",
+        "instant": true,
+        "format": "table"
+      }],
+      "title": "Error Breakdown by Endpoint (last 1h)",
+      "type": "table",
+      "transformations": [
+        { "id": "merge", "options": {} },
+        { "id": "organize", "options": {
+          "renameByName": { "Value": "Errors (1h)", "handler": "Endpoint", "status_code": "Status" },
+          "excludeByName": { "Time": true }
+        }}
+      ]
+    },
+
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 32 },
+      "id": 204,
+      "title": "Endpoint Usage",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "custom": { "lineWidth": 2 }, "unit": "reqps" }
+      },
+      "gridPos": { "h": 10, "w": 12, "x": 0, "y": 33 },
+      "id": 40,
+      "targets": [
+        { "expr": "topk(10, sum(rate(http_requests_total{job=\"controlplane_api\"}[5m])) by (handler))", "legendFormat": "{{handler}}", "refId": "A" }
+      ],
+      "title": "Top 10 Endpoints by Request Rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": { "displayMode": "color-background" },
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green", "value": null },
+            { "color": "yellow", "value": 500 },
+            { "color": "red", "value": 2000 }
+          ]}
+        }
+      },
+      "gridPos": { "h": 10, "w": 12, "x": 12, "y": 33 },
+      "id": 41,
+      "options": { "sortBy": [{ "desc": true, "displayName": "Requests (1h)" }] },
+      "targets": [{
+        "expr": "sort_desc(sum(increase(http_requests_total{job=\"controlplane_api\"}[1h])) by (handler, method))",
+        "legendFormat": "{{handler}}",
+        "refId": "A",
+        "instant": true,
+        "format": "table"
+      }],
+      "title": "Endpoint Request Counts (last 1h)",
+      "type": "table",
+      "transformations": [
+        { "id": "merge", "options": {} },
+        { "id": "organize", "options": {
+          "renameByName": { "Value": "Requests (1h)", "handler": "Endpoint", "method": "Method" },
+          "excludeByName": { "Time": true }
+        }}
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": { "displayMode": "color-background" },
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green", "value": null },
+            { "color": "yellow", "value": 0.2 },
+            { "color": "red", "value": 0.5 }
+          ]}
+        }
+      },
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 43 },
+      "id": 42,
+      "options": { "sortBy": [{ "desc": true, "displayName": "p95" }] },
+      "targets": [
+        { "expr": "histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket{job=\"controlplane_api\"}[5m])) by (le, handler))", "legendFormat": "{{handler}}", "refId": "A", "instant": true, "format": "table" },
+        { "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job=\"controlplane_api\"}[5m])) by (le, handler))", "legendFormat": "{{handler}}", "refId": "B", "instant": true, "format": "table" },
+        { "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{job=\"controlplane_api\"}[5m])) by (le, handler))", "legendFormat": "{{handler}}", "refId": "C", "instant": true, "format": "table" }
+      ],
+      "title": "Latency by Endpoint (p50 / p95 / p99)",
+      "type": "table",
+      "transformations": [
+        { "id": "merge", "options": {} },
+        { "id": "organize", "options": {
+          "renameByName": { "Value #A": "p50", "Value #B": "p95", "Value #C": "p99", "handler": "Endpoint" },
+          "excludeByName": { "Time": true }
+        }}
+      ]
+    },
+
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 53 },
+      "id": 205,
+      "title": "Users",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "custom": { "lineWidth": 2 }, "unit": "short" }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 54 },
+      "id": 50,
+      "targets": [
+        { "expr": "count(increase(controlplane_user_requests_total[5m]) > 0)", "legendFormat": "Active users", "refId": "A" }
+      ],
+      "title": "Active Users Over Time (5m window)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "custom": { "lineWidth": 2 }, "unit": "reqps" }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 54 },
+      "id": 51,
+      "targets": [
+        { "expr": "sum(rate(controlplane_user_requests_total[5m])) by (user_id)", "legendFormat": "{{user_id}}", "refId": "A" }
+      ],
+      "title": "Request Rate per User (5m)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": { "displayMode": "color-background" },
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] }
+        }
+      },
+      "gridPos": { "h": 10, "w": 12, "x": 0, "y": 62 },
+      "id": 52,
+      "options": { "sortBy": [{ "desc": true, "displayName": "Requests (1h)" }] },
+      "targets": [{
+        "expr": "sort_desc(sum(increase(controlplane_user_requests_total[1h])) by (user_id))",
+        "legendFormat": "{{user_id}}",
+        "refId": "A",
+        "instant": true,
+        "format": "table"
+      }],
+      "title": "Top Users by Request Count (last 1h)",
+      "type": "table",
+      "transformations": [
+        { "id": "merge", "options": {} },
+        { "id": "organize", "options": {
+          "renameByName": { "Value": "Requests (1h)", "user_id": "User ID" },
+          "excludeByName": { "Time": true }
+        }}
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": { "displayMode": "color-background" },
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green", "value": null },
+            { "color": "yellow", "value": 1 },
+            { "color": "red", "value": 10 }
+          ]}
+        }
+      },
+      "gridPos": { "h": 10, "w": 12, "x": 12, "y": 62 },
+      "id": 53,
+      "options": { "sortBy": [{ "desc": true, "displayName": "Errors (1h)" }] },
+      "targets": [{
+        "expr": "sort_desc(sum(increase(controlplane_user_requests_total{status_code=~\"[45]..\"}[1h])) by (user_id))",
+        "legendFormat": "{{user_id}}",
+        "refId": "A",
+        "instant": true,
+        "format": "table"
+      }],
+      "title": "Errors per User (last 1h)",
+      "type": "table",
+      "transformations": [
+        { "id": "merge", "options": {} },
+        { "id": "organize", "options": {
+          "renameByName": { "Value": "Errors (1h)", "user_id": "User ID" },
+          "excludeByName": { "Time": true }
+        }}
+      ]
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 38,
+  "tags": ["controlplane", "api"],
+  "templating": {
+    "list": [
+      {
+        "current": {},
+        "hide": 0,
+        "includeAll": false,
+        "label": "Datasource",
+        "name": "datasource",
+        "options": [],
+        "query": "prometheus",
+        "refresh": 1,
+        "type": "datasource"
+      }
+    ]
+  },
+  "time": { "from": "now-1h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "ControlPlane API Metrics",
+  "uid": "controlplane-api",
+  "version": 2
+}

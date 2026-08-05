@@ -1,0 +1,96 @@
+name: Deploy API in Haval (Windows)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "deploy" to confirm'
+        required: true
+
+jobs:
+  deploy:
+    runs-on:
+      group: control-plane
+      labels: [haval-2]
+    if: ${{ github.event.inputs.confirm == 'deploy' }}
+    defaults:
+      run:
+        shell: powershell  # PowerShell
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Detect server IP
+        id: server_ip
+        run: |
+          $ip = (Get-NetIPAddress -AddressFamily IPv4 | Where-Object {
+            $_.IPAddress -notmatch '^127\.' -and
+            $_.IPAddress -notmatch '^169\.254\.' -and
+            $_.PrefixOrigin -ne 'WellKnown'
+          } | Select-Object -First 1).IPAddress
+          echo "Using private IP: $ip"
+          echo "ip=$ip" >> $env:GITHUB_OUTPUT
+
+      - name: Write .env
+        run: |
+          $envDir = "C:\controlplane"
+          New-Item -ItemType Directory -Force -Path $envDir | Out-Null
+
+          # Write ENV_FILE secret to .env
+          $envContent = "${{ secrets.ENV_FILE }}"
+          $envContent | Set-Content -Path "$envDir\.env" -Encoding UTF8
+
+          # Override MinIO public endpoint with detected IP
+          $ip = "${{ steps.server_ip.outputs.ip }}"
+          $minioUrl = "http://$ip`:9000"
+          (Get-Content "$envDir\.env") -replace '^AWS_PUBLIC_ENDPOINT_URL=.*', "AWS_PUBLIC_ENDPOINT_URL=$minioUrl" |
+            Set-Content "$envDir\.env" -Encoding UTF8
+
+          echo "MinIO public endpoint set to: $minioUrl"
+
+      - name: Copy compose and nginx config
+        run: |
+          $envDir = "C:\controlplane"
+          Copy-Item -Force docker-compose.yml "$envDir\docker-compose.yml"
+          New-Item -ItemType Directory -Force -Path "$envDir\nginx" | Out-Null
+          Copy-Item -Force nginx\default.conf "$envDir\nginx\default.conf"
+
+      - name: Extract config files from API image
+        run: |
+          $envDir = "C:\controlplane"
+
+          # Remove any bad state
+          Remove-Item -Recurse -Force "$envDir\prometheus" -ErrorAction SilentlyContinue
+          Remove-Item -Recurse -Force "$envDir\grafana" -ErrorAction SilentlyContinue
+
+          # Create temp container
+          docker create --name temp_api ${{ secrets.DOCKERHUB_USERNAME }}/controlplane-api:latest
+
+          # Create directories
+          New-Item -ItemType Directory -Force -Path "$envDir\prometheus" | Out-Null
+          New-Item -ItemType Directory -Force -Path "$envDir\grafana\provisioning" | Out-Null
+          New-Item -ItemType Directory -Force -Path "$envDir\grafana\dashboards" | Out-Null
+
+          # Copy config files out
+          docker cp temp_api:/etc/prometheus/prometheus.yml "$envDir\prometheus\prometheus.yml"
+          docker cp temp_api:/etc/grafana/provisioning/. "$envDir\grafana\provisioning\"
+          docker cp temp_api:/etc/grafana/dashboards/. "$envDir\grafana\dashboards\"
+
+          # Clean up temp container
+          docker rm temp_api
+
+      - name: Pull latest images
+        run: |
+          docker pull ${{ secrets.DOCKERHUB_USERNAME }}/controlplane-api:latest
+          docker pull ${{ secrets.DOCKERHUB_USERNAME }}/controlplane-frontend:latest
+
+      - name: Restart services
+        run: |
+          Set-Location "C:\controlplane"
+          docker compose rm -sf frontend nginx
+          docker volume rm controlplane_frontend_build 2>$null
+          docker compose up -d --force-recreate
+
+      - name: Clean up
+        run: docker image prune -f

@@ -1,0 +1,59 @@
+name: Open Cloudflare Tunnel (localhost:10001)
+on:
+  workflow_dispatch:
+
+jobs:
+  tunnel:
+    runs-on:
+      group: control-plane
+      labels: [haval-2]
+    defaults:
+      run:
+        shell: powershell
+
+    steps:
+      - name: Install cloudflared (if missing)
+        run: |
+          $dest = "C:\cloudflared\cloudflared.exe"
+          if (-not (Test-Path $dest)) {
+            Write-Host "cloudflared not found - downloading..."
+            New-Item -ItemType Directory -Force -Path "C:\cloudflared" | Out-Null
+            Invoke-WebRequest -Uri "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe" -OutFile $dest -UseBasicParsing
+            Write-Host "cloudflared installed to $dest"
+          } else {
+            $v = & $dest --version
+            Write-Host "cloudflared already installed: $v"
+          }
+
+      - name: Kill any existing cloudflared process
+        run: |
+          $existing = Get-Process -Name "cloudflared" -ErrorAction SilentlyContinue
+          if ($existing) {
+            Write-Host "Found existing cloudflared process (PID $($existing.Id)) - killing it..."
+            Stop-Process -Name "cloudflared" -Force
+            Start-Sleep -Seconds 2
+            Write-Host "Killed."
+          } else {
+            Write-Host "No existing cloudflared process found."
+          }
+
+      - name: Check localhost:10001 is reachable
+        run: |
+          $tcp = New-Object System.Net.Sockets.TcpClient
+          try {
+            $tcp.Connect("127.0.0.1", 10001)
+            Write-Host "OK - port 10001 is open and listening"
+          } catch {
+            Write-Host "WARN - nothing listening on port 10001: $_"
+            netstat -ano | findstr "LISTENING"
+            exit 1
+          } finally {
+            $tcp.Close()
+          }
+
+      - name: Start Cloudflare Tunnel (foreground)
+        run: |
+          Write-Host "Starting tunnel - URL will appear below once connected..."
+          Write-Host "Cancel this workflow run to close the tunnel."
+          Write-Host ""
+          & "C:\cloudflared\cloudflared.exe" tunnel --url http://localhost:10001 --no-autoupdate
