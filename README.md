@@ -1,4 +1,4 @@
-# ControlPlane — Manufacturing Control & Quality Management Platform
+# AI based ControlPlane — Manufacturing Control & Quality Management Platform
 
 > **Enterprise-grade manufacturing operations platform for assembly-line process control, control-plan versioning, document intelligence, maintenance management, paint inspection, quality analytics, and real-time factory operations.**
 
